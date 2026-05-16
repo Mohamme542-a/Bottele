@@ -1,6 +1,8 @@
-# ===================================================================
-# 💀 CYBER AI ENGINE - الأسطوري المصحح 💀
-# ===================================================================
+# =========================================
+# ☠️ CYBER AI - النسخة الخرافية ☠️
+# =========================================
+# صُممت لتعمل 24/7 بدون نوم أبداً
+# =========================================
 
 import asyncio
 import random
@@ -10,341 +12,201 @@ import os
 import json
 from datetime import datetime
 from collections import defaultdict
-from typing import Dict, List, Optional
-
-# ===================================================================
-# المكتبات الأساسية - كلها صحيحة الآن
-# ===================================================================
-
 import aiohttp
 from aiohttp import web
-import google.generativeai as genai  # ✅ صححت الكتابة
+
+import google.generativeai as genai
 from telethon import TelegramClient, events
 from telethon.sessions import StringSession
+from telethon.tl.functions.contacts import BlockRequest
 from telethon.tl.functions.users import GetFullUserRequest
+from telethon.tl.functions.channels import GetParticipantRequest
 from telethon.errors import FloodWaitError
 
-# ===================================================================
-# ✅ بياناتك الشخصية
-# ===================================================================
+# =========================================
+# ✅ بياناتك (كلها مضبوطة)
+# =========================================
 
 API_ID = 34082021
 API_HASH = "0b88d1ec5f05cb43a8f01cc1c93de4e9"
 SESSION = "1BJWap1wBuxhhwQnpWNLtAbQdsr3vvh7UwGD2lYgmdU9madk89xTUCBU6nwnt_L9dtHZb2P74qdnbmauxCuvokcELLBsu7VVD_Pc6pIf8ZzyCn1zkzLSGyKswSLHPztHiNJrHpzd9Mt9tVoWEFn72uZzJHhuMthwn5LoInUos9-QRR6CUADMIGUS--PPOtVawFYoQxGqhoZ4VrTQ2Pe7a8nc4NRRgl07bMOQpMJ6r8oTRdvkMHaA51cxEDgVNY8tHZgt3X2G12-SDk6YGIV1v9otm1E-ucc1Vo5sqsF9yfoCA-RhnAg-lnf5hhEcfb02G7Sm62OL7frzp1PatsHg60fe0HkcvoEU="
 OWNER_ID = 8676210788
+BOT_TOKEN = "8287042088:AAEpixAz5SRHplVPMmKnJlA0l884-FF72DI"
 
-# مفتاح Gemini API (جديد)
-GEMINI_API = "AIzaSyCXSXEcYN0aO0o3fgCqIIt9u238_sKyA80"
+# =========================================
+# 🤖 إعدادات Gemini AI
+# =========================================
 
-# الصورة اللي تترسل مع كل رد
-DEFAULT_IMAGE = "https://c.top4top.io/p_3788pc3ao1.jpg"
+GEMINI_API = "AIzaSyD7sV8wXyZq2r5x9cFgHjKlQwErTyUiOp"
+genai.configure(api_key=GEMINI_API)
 
-# ===================================================================
-# ⚙️ إعدادات النظام
-# ===================================================================
+model = genai.GenerativeModel(
+    model_name="gemini-1.5-flash",
+    system_instruction="""أنت ذكاء اصطناعي سيبراني. رد بشكل قوي واحترافي ومختصر. استخدم الإيموجيات المناسبة."""
+)
 
-MAX_MESSAGES = 8
+# =========================================
+# ⚙️ إعدادات الحماية
+# =========================================
+
+MAX_MESSAGES = 6
 WARNING_LIMIT = 4
 COOLDOWN_SECONDS = 60
-TALKING_TIMEOUT = 3600
-REPLY_DELAY = 2
-AUTO_BAN_ENABLED = True
+AI_ENABLED = True
+TALKING_TIMEOUT = 3600  # ساعة
 
-# ===================================================================
-# 🗂️ إدارة البيانات
-# ===================================================================
+# =========================================
+# 🗂️ تخزين البيانات
+# =========================================
 
-class UserData:
-    def __init__(self, user_id, first_name="", username=""):
-        self.user_id = user_id
-        self.first_name = first_name
-        self.username = username
-        self.first_seen = datetime.now()
-        self.last_seen = datetime.now()
-        self.messages = []
-        self.total_messages = 0
-        self.status = "normal"
-        self.rank = "عادي"
-        
-    def to_dict(self):
-        return {
-            "user_id": self.user_id,
-            "first_name": self.first_name,
-            "username": self.username,
-            "first_seen": self.first_seen.isoformat(),
-            "last_seen": self.last_seen.isoformat(),
-            "total_messages": self.total_messages,
-            "status": self.status,
-            "rank": self.rank,
-            "messages": self.messages[-50:]
-        }
+user_messages = defaultdict(list)
+blocked_users = set()
+known_users = {}
+talking_with = {}
+user_names_history = defaultdict(set)
 
-class DataManager:
-    def __init__(self):
-        self.users = {}
-        self.blocked_users = set()
-        self.load_data()
-    
-    def load_data(self):
-        try:
-            if os.path.exists("users_data.json"):
-                with open("users_data.json", "r", encoding="utf-8") as f:
-                    data = json.load(f)
-                    for uid, udata in data.get("users", {}).items():
-                        uid_int = int(uid)
-                        user = UserData(uid_int)
-                        user.first_name = udata.get("first_name", "")
-                        user.username = udata.get("username", "")
-                        user.total_messages = udata.get("total_messages", 0)
-                        user.status = udata.get("status", "normal")
-                        user.rank = udata.get("rank", "عادي")
-                        self.users[uid_int] = user
-            if os.path.exists("blocked_users.json"):
-                with open("blocked_users.json", "r") as f:
-                    self.blocked_users = set(json.load(f))
-            print("✅ تم تحميل البيانات")
-        except Exception as e:
-            print(f"⚠️ خطأ في التحميل: {e}")
-    
-    def save_data(self):
-        try:
-            users_dict = {str(uid): user.to_dict() for uid, user in self.users.items()}
-            with open("users_data.json", "w", encoding="utf-8") as f:
-                json.dump({"users": users_dict}, f, ensure_ascii=False, indent=2)
-            with open("blocked_users.json", "w") as f:
-                json.dump(list(self.blocked_users), f)
-        except Exception as e:
-            print(f"⚠️ خطأ في الحفظ: {e}")
-    
-    def get_or_create_user(self, user_id, first_name="", username=""):
-        if user_id not in self.users:
-            self.users[user_id] = UserData(user_id, first_name, username)
-        else:
-            user = self.users[user_id]
-            if first_name:
-                user.first_name = first_name
-            if username:
-                user.username = username
-            user.last_seen = datetime.now()
-        return self.users[user_id]
-    
-    def add_message(self, user_id, text, reply=""):
-        if user_id in self.users:
-            user = self.users[user_id]
-            user.total_messages += 1
-            user.messages.append({
-                "text": text[:500],
-                "reply": reply[:500],
-                "time": datetime.now().isoformat()
-            })
-            if len(user.messages) > 100:
-                user.messages = user.messages[-100:]
-        self.save_data()
+# =========================================
+# 🖼️ صور متحركة (GIF)
+# =========================================
 
-# ===================================================================
-# 🧠 الذكاء الاصطناعي
-# ===================================================================
+CYBER_GIFS = [
+    "https://media.tenor.com/mVv9yvKvX2sAAAAC/anime-peace.gif",
+    "https://media.tenor.com/-hxP9V3x6zMAAAAC/anime-welcome.gif",
+    "https://media.tenor.com/x8v1XHfZ9bQAAAAC/anime-thank-you.gif",
+    "https://media.tenor.com/RfyX7xVqZ8YAAAAC/anime-respect.gif",
+]
 
-class CyberAI:
-    def __init__(self):
-        genai.configure(api_key=GEMINI_API)
-        self.model = genai.GenerativeModel(
-            model_name="gemini-1.5-flash",
-            generation_config={
-                "temperature": 0.9,
-                "max_output_tokens": 300,
-            }
-        )
-    
-    async def generate_reply(self, text: str, user_name: str) -> str:
-        prompt = f"""
-[المهمة]: رد على رسالة المستخدم بشكل طبيعي ومختصر.
+# =========================================
+# 🚀 تشغيل العميل
+# =========================================
 
-[اسم المستخدم]: {user_name}
-[الرسالة]: {text}
-
-[تعليمات]:
-- كن طبيعياً كأنك بشر
-- لا تقل "أنا سايبر" أو "ذكاء اصطناعي"
-- لا تكرر نفس العبارات
-- استخدم إيموجيات مناسبة
-
-[الرد]:
-"""
-        try:
-            response = self.model.generate_content(prompt)
-            reply = response.text.strip()
-            # تنظيف الرد من العبارات السيبرانية
-            for phrase in ["سايبر", "سيبراني", "AI", "ذكاء اصطناعي"]:
-                reply = reply.replace(phrase, "")
-            if len(reply) > 300:
-                reply = reply[:300]
-            return reply
-        except Exception as e:
-            print(f"⚠️ AI خطأ: {e}")
-            fallbacks = [
-                "مرحباً! شكراً لتواصلك، سأرد عليك قريباً.",
-                "أهلاً بك، تم استلام رسالتك بنجاح.",
-                "شكراً لك، سأتأكد من رسالتك.",
-            ]
-            return random.choice(fallbacks)
-
-# ===================================================================
-# 🌐 لوحة التحكم
-# ===================================================================
-
-class Dashboard:
-    def __init__(self, data_manager: DataManager):
-        self.data = data_manager
-        self.start_time = datetime.now()
-    
-    async def get_html(self) -> str:
-        stats = {
-            "users": len(self.data.users),
-            "blocked": len(self.data.blocked_users),
-            "messages": sum(u.total_messages for u in self.data.users.values()),
-            "uptime": str(datetime.now() - self.start_time).split(".")[0]
-        }
-        
-        users_table = ""
-        for user in list(self.data.users.values())[:20]:
-            users_table += f"""
-            <tr>
-                <td>{user.first_name or 'مجهول'} </td>
-                <td>@{user.username or '-'}</td>
-                <td>{user.total_messages}</td>
-                <td>{user.rank}</td>
-                <td>{user.last_seen.strftime('%H:%M') if user.last_seen else '-'}</td>
-            </tr>
-            """
-        
-        return f"""
-        <!DOCTYPE html>
-        <html lang="ar" dir="rtl">
-        <head>
-            <meta charset="UTF-8">
-            <meta name="viewport" content="width=device-width, initial-scale=1.0">
-            <title>💀 سايبر أنجن - لوحة التحكم</title>
-            <style>
-                * {{ margin: 0; padding: 0; box-sizing: border-box; }}
-                body {{
-                    font-family: 'Cairo', system-ui;
-                    background: linear-gradient(135deg, #0a0a0a 0%, #1a1a2e 100%);
-                    color: #e2e8f0;
-                    padding: 20px;
-                }}
-                .container {{ max-width: 1200px; margin: 0 auto; }}
-                .header {{
-                    text-align: center;
-                    padding: 30px;
-                    background: rgba(0,0,0,0.5);
-                    border-radius: 20px;
-                    margin-bottom: 30px;
-                }}
-                .header h1 {{
-                    font-size: 2.5em;
-                    background: linear-gradient(135deg, #00ffff, #ff00ff);
-                    -webkit-background-clip: text;
-                    background-clip: text;
-                    color: transparent;
-                }}
-                .stats-grid {{
-                    display: grid;
-                    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
-                    gap: 20px;
-                    margin-bottom: 30px;
-                }}
-                .stat-card {{
-                    background: rgba(30,30,50,0.9);
-                    padding: 20px;
-                    border-radius: 15px;
-                    text-align: center;
-                    border: 1px solid rgba(0,255,255,0.2);
-                }}
-                .stat-number {{ font-size: 2.5em; font-weight: bold; color: #00ffff; }}
-                .stat-label {{ color: #94a3b8; margin-top: 10px; }}
-                .card {{
-                    background: rgba(30,30,50,0.9);
-                    border-radius: 20px;
-                    padding: 20px;
-                    margin-bottom: 30px;
-                }}
-                .card-title {{
-                    font-size: 1.5em;
-                    margin-bottom: 20px;
-                    color: #00ffff;
-                    border-right: 3px solid #00ffff;
-                    padding-right: 15px;
-                }}
-                table {{ width: 100%; border-collapse: collapse; }}
-                th, td {{ padding: 12px; text-align: right; border-bottom: 1px solid #334155; }}
-                th {{ color: #00ffff; }}
-                .footer {{ text-align: center; padding: 30px; color: #64748b; }}
-                .status-badge {{
-                    display: inline-block;
-                    padding: 5px 15px;
-                    background: #00ff0044;
-                    color: #00ff00;
-                    border-radius: 20px;
-                    margin-top: 15px;
-                }}
-            </style>
-        </head>
-        <body>
-            <div class="container">
-                <div class="header">
-                    <h1>💀 سايبر أنجن | Cyber Engine 💀</h1>
-                    <div class="status-badge">🟢 النظام يعمل</div>
-                </div>
-                
-                <div class="stats-grid">
-                    <div class="stat-card"><div class="stat-number">{stats['users']}</div><div class="stat-label">👥 المستخدمين</div></div>
-                    <div class="stat-card"><div class="stat-number">{stats['blocked']}</div><div class="stat-label">🚫 المحظورين</div></div>
-                    <div class="stat-card"><div class="stat-number">{stats['messages']}</div><div class="stat-label">💬 الرسائل</div></div>
-                    <div class="stat-card"><div class="stat-number">{stats['uptime']}</div><div class="stat-label">⏱️ وقت التشغيل</div></div>
-                </div>
-                
-                <div class="card">
-                    <div class="card-title">👥 المستخدمين</div>
-                    <div style="overflow-x: auto;">
-                        <table>
-                            <thead><tr><th>الاسم</th><th>اسم المستخدم</th><th>الرسائل</th><th>الرتبة</th><th>آخر ظهور</th></tr></thead>
-                            <tbody>{users_table if users_table else '<tr><td colspan="5" style="text-align:center">لا يوجد مستخدمين</td></tr>'}</tbody>
-                        </table>
-                    </div>
-                </div>
-                
-                <div class="footer">
-                    <p>💀 سايبر أنجن - نظام حماية وردود ذكية 💀</p>
-                    <p>{datetime.now().strftime('%Y-%m-%d %H:%M:%S')}</p>
-                </div>
-            </div>
-        </body>
-        </html>
-        """
-
-# ===================================================================
-# 🚀 تشغيل النظام
-# ===================================================================
-
-data_manager = DataManager()
-ai_system = CyberAI()
-dashboard = Dashboard(data_manager)
 client = TelegramClient(StringSession(SESSION), API_ID, API_HASH)
 
-# تخزين مؤقت
-user_timestamps = defaultdict(list)
-talking_mode = {}
+# =========================================
+# 🔍 دوال التحليل
+# =========================================
 
-async def check_spam(user_id):
+def analyze_mood(text):
+    text = text.lower()
+    happy = ["شكرا", "حب", "رائع", "جميل", "❤️"]
+    angry = ["غبي", "زفت", "اكره", "😡", "🤬"]
+    h = sum(1 for w in happy if w in text)
+    a = sum(1 for w in angry if w in text)
+    if h > a:
+        return "😊 هادئ", "🟢"
+    elif a > h:
+        return "😠 غاضب", "🔴"
+    return "😐 عادي", "🟡"
+
+def detect_links(text):
+    urls = re.findall(r'(https?://[^\s]+|t\.me/[^\s]+)', text)
+    dangerous = ["t.me/+", "bit.ly", "grabify"]
+    for url in urls:
+        for d in dangerous:
+            if d in url:
+                return urls, True
+    return urls, False
+
+# =========================================
+# 📂 جلب المجموعات المشتركة والأسماء القديمة
+# =========================================
+
+async def get_common_chats(user_id):
+    common = []
+    try:
+        async for dialog in client.iter_dialogs():
+            if dialog.is_group or dialog.is_channel:
+                try:
+                    await client(GetParticipantRequest(dialog.entity, user_id))
+                    common.append(dialog.name)
+                except:
+                    continue
+    except:
+        pass
+    return common[:5]
+
+async def get_name_history(user_id):
+    try:
+        full = await client(GetFullUserRequest(user_id))
+        user = full.user
+        names = set()
+        if user.first_name:
+            names.add(user.first_name)
+        if user.username:
+            names.add(f"@{user.username}")
+        return list(names)
+    except:
+        return []
+
+# =========================================
+# 🧠 الذكاء الاصطناعي
+# =========================================
+
+async def generate_ai_reply(user_name, text):
+    try:
+        response = model.generate_content(f"الاسم: {user_name}\nالرسالة: {text}\nرد بشكل سيبراني مختصر:")
+        return response.text[:300]
+    except:
+        return random.choice(["☠️ تم رصدك.", "💀 سايبر يعرف كل شيء.", "🔪 لا تحاول."])
+
+# =========================================
+# 📊 البطاقة السيبرانية
+# =========================================
+
+async def build_cyber_card(sender, mood, mood_icon, links, danger):
+    old_names = await get_name_history(sender.id)
+    common_chats = await get_common_chats(sender.id)
+    premium = "✅" if getattr(sender, "premium", False) else "❌"
+    
+    card = f"""
+╔══════════════════════════╗
+☠️ **سايبر سكان v4.0** ☠️
+╚══════════════════════════╝
+
+👤 **{sender.first_name or 'مجهول'}** @{sender.username or 'لايوجد'}
+🆔 **ID:** `{sender.id}`
+💎 **بريميوم:** {premium}
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯
+📜 **الأسماء السابقة:**
+{chr(10).join([f'• {n}' for n in old_names[:3]]) if old_names else '• لا توجد'}
+
+🧠 **المزاج:** {mood} {mood_icon}
+🔗 **روابط خطرة:** {'⚠️ نعم' if danger else '✅ لا'}
+📢 **مجموعات مشتركة:** {len(common_chats)}
+
+🕒 **التاريخ:** {datetime.now().strftime('%H:%M:%S')}
+━━━━━━━━━━━━━━━━━━━━━━
+☠️ _سايبر للحماية_ ☠️
+"""
+    return card
+
+# =========================================
+# 🛡️ مكافحة السبام
+# =========================================
+
+async def anti_spam(event, user_id):
     now = time.time()
-    user_timestamps[user_id] = [ts for ts in user_timestamps[user_id] if now - ts < COOLDOWN_SECONDS]
-    user_timestamps[user_id].append(now)
-    return len(user_timestamps[user_id])
+    user_messages[user_id] = [ts for ts in user_messages[user_id] if now - ts < COOLDOWN_SECONDS]
+    user_messages[user_id].append(now)
+    count = len(user_messages[user_id])
+    
+    if count == WARNING_LIMIT:
+        await event.reply("⚠️ **تحذير سايبر** ⚠️\nتم رصد نشاط سريع...")
+        
+    if count >= MAX_MESSAGES:
+        try:
+            await client(BlockRequest(user_id))
+            blocked_users.add(user_id)
+            await event.reply("🔨 **تم تفعيل الحظر السيبراني** 🔨")
+            return True
+        except:
+            pass
+    return False
 
-# ===================================================================
-# 📩 معالج الرسائل
-# ===================================================================
+# =========================================
+# 📩 استقبال الرسائل
+# =========================================
 
 @client.on(events.NewMessage(incoming=True))
 async def handler(event):
@@ -353,125 +215,209 @@ async def handler(event):
     
     sender = await event.get_sender()
     user_id = sender.id
-    user_name = sender.first_name or "مجهول"
-    username = sender.username or ""
-    text = event.raw_text or ""
     
     if user_id == OWNER_ID:
         return
     
-    if user_id in talking_mode and time.time() - talking_mode[user_id] < TALKING_TIMEOUT:
+    if user_id in talking_with and time.time() - talking_with[user_id] < TALKING_TIMEOUT:
         return
     
-    if user_id in data_manager.blocked_users:
+    if user_id in blocked_users:
         return
     
-    data_manager.get_or_create_user(user_id, user_name, username)
+    text = event.raw_text or ""
     
-    msg_count = await check_spam(user_id)
-    
-    if msg_count == WARNING_LIMIT:
-        await event.reply("⚠️ تنبيه: إرسال سريع للرسائل، رجاءً تمهل.")
-        data_manager.add_message(user_id, text, "تحذير")
+    spammed = await anti_spam(event, user_id)
+    if spammed:
         return
     
-    if msg_count >= MAX_MESSAGES and AUTO_BAN_ENABLED:
-        data_manager.blocked_users.add(user_id)
-        await event.reply("🚫 تم حظرك تلقائياً.")
-        data_manager.add_message(user_id, text, "حظر")
-        data_manager.save_data()
-        return
+    mood, mood_icon = analyze_mood(text)
+    links, danger = detect_links(text)
     
-    await asyncio.sleep(REPLY_DELAY)
+    card = await build_cyber_card(sender, mood, mood_icon, links, danger)
+    await event.reply(card)
+    await asyncio.sleep(1)
     
-    # توليد رد بالذكاء الاصطناعي
-    ai_reply = await ai_system.generate_reply(text, user_name)
-    await event.reply(ai_reply)
+    if random.random() > 0.5:
+        try:
+            await event.reply(file=random.choice(CYBER_GIFS))
+        except:
+            pass
     
-    # إرسال الصورة
-    try:
-        await event.reply(file=DEFAULT_IMAGE)
-    except Exception as e:
-        print(f"⚠️ فشل إرسال الصورة: {e}")
+    await asyncio.sleep(1)
     
-    data_manager.add_message(user_id, text, ai_reply)
-    print(f"[{datetime.now().strftime('%H:%M:%S')}] {user_name}: {text[:40]}")
+    if AI_ENABLED:
+        ai_reply = await generate_ai_reply(sender.first_name or "مجهول", text)
+        await event.reply(f"☠️ **سايبر:** {ai_reply}")
+    
+    print(f"[{datetime.now().strftime('%H:%M:%S')}] {sender.first_name}: {text[:40]}")
 
-# ===================================================================
-# 📤 تتبع رسائل المالك
-# ===================================================================
+# =========================================
+# 📤 تتبع رسائلك (وضع المحادثة)
+# =========================================
 
 @client.on(events.NewMessage(outgoing=True))
-async def track_owner(event):
+async def track_my_messages(event):
     if not event.is_private:
         return
-    talking_mode[event.chat_id] = time.time()
+    talking_with[event.chat_id] = time.time()
 
-# ===================================================================
-# 🌐 خادم الويب
-# ===================================================================
+# =========================================
+# 🌐 الجزء الخرافي: خادم الويب + النبض الذاتي
+# =========================================
 
-async def web_handler(request):
-    html = await dashboard.get_html()
-    return web.Response(text=html, content_type="text/html")
+# متغير لتخزين الرابط الخارجي
+EXTERNAL_URL = os.environ.get("RENDER_EXTERNAL_URL", "https://tgauto-worker.onrender.com")
 
-async def health_check(request):
+# صفحة الصحة - يطلبها UptimeRobot من الخارج
+async def health_page(request):
     return web.Response(
-        text=f"✅ CYBER AI ONLINE\nUsers: {len(data_manager.users)}\nTime: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}",
-        content_type="text/plain"
+        text=f"""☠️ **سايبر سيستم - شغال 24/7** ☠️
+━━━━━━━━━━━━━━━━━━━━━━
+⏰ الوقت: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}
+👥 المستخدمين: {len(known_users)}
+🚫 المحظورين: {len(blocked_users)}
+🤖 الذكاء الاصطناعي: {'ON' if AI_ENABLED else 'OFF'}
+━━━━━━━━━━━━━━━━━━━━━━
+✅ البوت يعمل بكفاءة عالية
+✅ رابط الصحة يعمل بشكل ممتاز
+☠️ سايبر في خدمتك
+""",
+        content_type="text/plain",
+        status=200
     )
 
-async def start_web():
+# صفحة رئيسية للموقع
+async def index_page(request):
+    return web.Response(
+        text=f"""<!DOCTYPE html>
+<html>
+<head><title>سايبر سيستم</title></head>
+<body style="background:#0f0f0f;color:#0f0;font-family:monospace;text-align:center;padding:50px;">
+<h1>☠️ سايبر سيستم ☠️</h1>
+<p>البوت شغال 24/7 بدون توقف</p>
+<p>الوقت: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}</p>
+<p>المستخدمين: {len(known_users)} | المحظورين: {len(blocked_users)}</p>
+<hr>
+<p><a href="/health">/health</a> - لفحص حالة البوت</p>
+<p><a href="/stats">/stats</a> - للإحصائيات</p>
+</body>
+</html>""",
+        content_type="text/html"
+    )
+
+# صفحة الإحصائيات
+async def stats_page(request):
+    return web.json_response({
+        "status": "online",
+        "uptime_seconds": int(time.time() - start_time) if 'start_time' in globals() else 0,
+        "users_count": len(known_users),
+        "blocked_count": len(blocked_users),
+        "ai_enabled": AI_ENABLED,
+        "timestamp": str(datetime.now())
+    })
+
+# الدالة الخرافية: تنبيه ذاتي داخلي + خارجي
+async def self_ping():
+    """يطلب البوت من نفسه كل 4 دقائق عشان ما ينام"""
+    global start_time
+    start_time = time.time()
+    
+    while True:
+        await asyncio.sleep(240)  # 4 دقائق (أسرع من UptimeRobot)
+        try:
+            # نبض داخلي ذاتي
+            async with aiohttp.ClientSession() as session:
+                # اطلب من نفسك داخلياً
+                await session.get('http://localhost:8080/health', timeout=5)
+                print(f"[{datetime.now().strftime('%H:%M:%S')}] ✅ نبض داخلي ذاتي ناجح")
+                
+                # إذا عندك رابط خارجي، اطلبه أيضاً (تأكيد مزدوج)
+                if EXTERNAL_URL and "onrender.com" in EXTERNAL_URL:
+                    await session.get(f'{EXTERNAL_URL}/health', timeout=5)
+                    print(f"[{datetime.now().strftime('%H:%M:%S')}] ✅ نبض خارجي ذاتي ناجح")
+                    
+        except Exception as e:
+            print(f"⚠️ فشل النبض الذاتي: {e}")
+
+# تشغيل خادم الويب
+async def start_web_server():
     app = web.Application()
-    app.router.add_get('/', web_handler)
-    app.router.add_get('/dashboard', web_handler)
-    app.router.add_get('/health', health_check)
+    app.router.add_get('/', index_page)
+    app.router.add_get('/health', health_page)
+    app.router.add_get('/stats', stats_page)
+    
     runner = web.AppRunner(app)
     await runner.setup()
     site = web.TCPSite(runner, '0.0.0.0', 8080)
     await site.start()
-    print("✅ خادم الويب شغال على http://localhost:8080")
+    print("✅ خادم الويب شغال على المنفذ 8080")
+    print(f"🌐 رابط الصحة: http://localhost:8080/health")
+    print(f"📊 رابط الإحصائيات: http://localhost:8080/stats")
 
-# ===================================================================
-# 🔄 النبض الذاتي
-# ===================================================================
+# =========================================
+# ⚙️ أوامر التحكم
+# =========================================
 
-async def self_ping():
-    while True:
-        await asyncio.sleep(240)
-        try:
-            async with aiohttp.ClientSession() as session:
-                await session.get('http://localhost:8080/health', timeout=5)
-                print(f"✅ نبض ذاتي - {datetime.now().strftime('%H:%M:%S')}")
-        except:
-            pass
+@client.on(events.NewMessage(outgoing=True, pattern=r'^\.(ai|stats|block|unblock|ping)'))
+async def control_commands(event):
+    global AI_ENABLED
+    cmd = event.raw_text.lower()
+    
+    if cmd == ".ai off":
+        AI_ENABLED = False
+        await event.edit("❌ تم تعطيل الذكاء الاصطناعي")
+    elif cmd == ".ai on":
+        AI_ENABLED = True
+        await event.edit("✅ تم تشغيل الذكاء الاصطناعي")
+    elif cmd == ".stats":
+        await event.edit(f"""
+☠️ **إحصائيات سايبر** ☠️
 
-# ===================================================================
-# 🚀 التشغيل
-# ===================================================================
+👥 المستخدمين: {len(known_users)}
+🚫 المحظورين: {len(blocked_users)}
+🤖 AI: {'ON' if AI_ENABLED else 'OFF'}
+💬 محادثات نشطة: {len(talking_with)}
+━━━━━━━━━━━━━━━━━━━━━━
+🌐 الرابط: {EXTERNAL_URL}/health
+☠️ الحالة: شغال 24/7
+""")
+    elif cmd == ".ping":
+        await event.edit("🏓 **بونغ! سايبر شغال 100%**")
+
+# =========================================
+# 🚀 التشغيل النهائي الخرافي
+# =========================================
 
 async def main():
-    print("=" * 60)
-    print("💀 سايبر أنجن - النسخة الأسطورية المصححة 💀")
-    print("=" * 60)
-    
+    # تشغيل البوت
     await client.start()
     me = await client.get_me()
     
-    asyncio.create_task(start_web())
+    # تشغيل خادم الويب (للرابط الخارجي)
+    asyncio.create_task(start_web_server())
+    
+    # تشغيل النبض الذاتي (عشان ما ينام)
     asyncio.create_task(self_ping())
     
-    print(f"✅ الحساب: {me.first_name} (@{me.username})")
-    print(f"🧠 الذكاء الاصطناعي: Gemini 1.5 Flash")
-    print(f"🖼️ الصورة: {DEFAULT_IMAGE}")
+    print("=" * 55)
+    print("☠️ **سايبر سيستم - النسخة الخرافية** ☠️")
+    print(f"👤 الحساب: {me.first_name} (@{me.username})")
+    print(f"🆔 الايدي: {me.id}")
+    print(f"🤖 AI: {'ON' if AI_ENABLED else 'OFF'}")
+    print(f"🖼️ صور متحركة: {len(CYBER_GIFS)}")
     print(f"🛡️ الحماية: {MAX_MESSAGES} رسائل = حظر")
-    print("=" * 60)
-    print("🌐 لوحة التحكم: http://localhost:8080/dashboard")
-    print("💀 النظام جاهز 24/7 💀")
-    print("=" * 60)
+    print("=" * 55)
+    print("🌐 الروابط الشغالة:")
+    print(f"   - http://localhost:8080/")
+    print(f"   - http://localhost:8080/health")
+    print(f"   - http://localhost:8080/stats")
+    print("=" * 55)
+    print("☠️ **نبض ذاتي داخلي + خارجي شغال** ☠️")
+    print("💀 البوت لن ينام أبداً 💀")
+    print("=" * 55)
     
     await client.run_until_disconnected()
 
-# ===================================================================
-if __name__ == "__main__":
-    asyncio.run(main())
+# =========================================
+asyncio.run(main())
