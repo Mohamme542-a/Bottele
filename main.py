@@ -1,5 +1,5 @@
 # ===================================================================
-# 💀 CYBER AI ENGINE - النسخة النهائية الأسطورية 💀
+# 💀 CYBER AI ENGINE - النسخة النهائية الكاملة 💀
 # ===================================================================
 
 import asyncio
@@ -12,6 +12,8 @@ from collections import defaultdict
 
 from telethon import TelegramClient, events
 from telethon.sessions import StringSession
+from telethon.tl.functions.users import GetFullUserRequest
+from aiohttp import web
 
 # ===================================================================
 # ✅ بياناتك - كلها مضبوطة
@@ -20,48 +22,24 @@ from telethon.sessions import StringSession
 API_ID = 34082021
 API_HASH = "0b88d1ec5f05cb43a8f01cc1c93de4e9"
 
-# السيشن الجديد - مخصوص لـ Render فقط
 SESSION = "1BJWap1sBu30GulG13MrOKpfv_bU1No5RUDlcR21GmF03_V8H9it6LseZpHODk51zqzzjS4-sOx98AoXANMGLBI0K4dP0sERlkMJP3RLfaWWeRMvRODzhU5sDkJgvn8pZQ63-2hIYTmGGjyLq-1FfhxcIY9_AJOmhFJ4i3O6AByrj4ffn0CNrlVIxsEMgCaf_ntkJ9uLsMW7gSd_tnhD4N3J6Oi_mm-G_HN6E4Q7YKZVTTOOWjellx66kJa2429iDS7LSiaR5PI7xZ-_iSOyzxvADvnNPtQExxQtdrgUBxjWdB5bgSJqbMY9T3ynsxfss3v1ZfkWRzr2SjrZ5kXLFmKN3Zj5bAiU="
 
 OWNER_ID = 8676210788
-
-# الصورة اللي تترسل مع كل رد
 DEFAULT_IMAGE = "https://c.top4top.io/p_3788pc3ao1.jpg"
 
 # ===================================================================
-# ⚙️ إعدادات الحماية
+# ⚙️ إعدادات النظام
 # ===================================================================
 
-MAX_MESSAGES = 8          # 8 رسائل = حظر
-WARNING_LIMIT = 4         # 4 رسائل = تحذير
-COOLDOWN_SECONDS = 60     # خلال 60 ثانية
-REPLY_DELAY = 2           # تأخير الرد ثانيتين
-TALKING_TIMEOUT = 3600    # ساعة (وضع المحادثة)
+MAX_MESSAGES = 8
+WARNING_LIMIT = 4
+COOLDOWN_SECONDS = 60
+REPLY_DELAY = 2
+TALKING_TIMEOUT = 3600
 
 # ===================================================================
 # 🗂️ تخزين البيانات
 # ===================================================================
-
-class UserData:
-    def __init__(self, user_id, first_name="", username=""):
-        self.user_id = user_id
-        self.first_name = first_name
-        self.username = username
-        self.first_seen = datetime.now()
-        self.last_seen = datetime.now()
-        self.messages = []
-        self.total_messages = 0
-        
-    def to_dict(self):
-        return {
-            "user_id": self.user_id,
-            "first_name": self.first_name,
-            "username": self.username,
-            "first_seen": self.first_seen.isoformat(),
-            "last_seen": self.last_seen.isoformat(),
-            "total_messages": self.total_messages,
-            "messages": self.messages[-50:]
-        }
 
 class DataManager:
     def __init__(self):
@@ -75,58 +53,28 @@ class DataManager:
                 with open("users_data.json", "r", encoding="utf-8") as f:
                     data = json.load(f)
                     for uid, udata in data.get("users", {}).items():
-                        uid_int = int(uid)
-                        user = UserData(uid_int)
-                        user.first_name = udata.get("first_name", "")
-                        user.username = udata.get("username", "")
-                        user.total_messages = udata.get("total_messages", 0)
-                        self.users[uid_int] = user
+                        self.users[int(uid)] = udata
             if os.path.exists("blocked_users.json"):
                 with open("blocked_users.json", "r") as f:
                     self.blocked_users = set(json.load(f))
-            print("✅ تم تحميل البيانات")
-        except Exception as e:
-            print(f"⚠️ خطأ في التحميل: {e}")
+        except:
+            pass
     
     def save_data(self):
         try:
-            users_dict = {str(uid): user.to_dict() for uid, user in self.users.items()}
             with open("users_data.json", "w", encoding="utf-8") as f:
-                json.dump({"users": users_dict}, f, ensure_ascii=False, indent=2)
+                json.dump({"users": self.users}, f, ensure_ascii=False, indent=2)
             with open("blocked_users.json", "w") as f:
                 json.dump(list(self.blocked_users), f)
-            print(f"💾 تم حفظ البيانات - {len(self.users)} مستخدم")
-        except Exception as e:
-            print(f"⚠️ خطأ في الحفظ: {e}")
+        except:
+            pass
     
-    def get_or_create_user(self, user_id, first_name="", username=""):
-        if user_id not in self.users:
-            self.users[user_id] = UserData(user_id, first_name, username)
-        else:
-            user = self.users[user_id]
-            if first_name:
-                user.first_name = first_name
-            if username:
-                user.username = username
-            user.last_seen = datetime.now()
-        return self.users[user_id]
+    def get_user(self, user_id):
+        return self.users.get(str(user_id), {})
     
-    def add_message(self, user_id, text, reply=""):
-        if user_id in self.users:
-            user = self.users[user_id]
-            user.total_messages += 1
-            user.messages.append({
-                "text": text[:500],
-                "reply": reply[:500],
-                "time": datetime.now().isoformat()
-            })
-            if len(user.messages) > 100:
-                user.messages = user.messages[-100:]
+    def save_user(self, user_id, data):
+        self.users[str(user_id)] = data
         self.save_data()
-
-# ===================================================================
-# 🚀 تشغيل العميل
-# ===================================================================
 
 data_manager = DataManager()
 client = TelegramClient(StringSession(SESSION), API_ID, API_HASH)
@@ -135,7 +83,7 @@ client = TelegramClient(StringSession(SESSION), API_ID, API_HASH)
 user_timestamps = defaultdict(list)
 talking_mode = {}
 
-# ردود طبيعية ومتنوعة (بدون عبارات سايبر)
+# ردود متنوعة
 REPLIES = [
     "مرحباً! شكراً لتواصلك، سأرد عليك قريباً.",
     "أهلاً بك، تم استلام رسالتك بنجاح.",
@@ -144,28 +92,60 @@ REPLIES = [
     "تم استلام رسالتك، شكراً على تواصلك.",
     "أهلاً وسهلاً، رسالتك وصلت.",
     "شكراً لتواصلك، سأعود إليك قريباً.",
-    "مرحباً! أنا هنا لمساعدتك.",
-    "تم التسلم! شكراً لك.",
-    "أهلاً بك، سأرد عليك خلال فترة قصيرة.",
 ]
 
 # ===================================================================
-# دوال الحماية
+# 🔍 دوال جلب المعلومات
+# ===================================================================
+
+async def get_user_info(user_id):
+    """جلب معلومات كاملة عن المستخدم"""
+    try:
+        full = await client(GetFullUserRequest(user_id))
+        user = full.user
+        return {
+            "first_name": user.first_name or "لا يوجد",
+            "last_name": user.last_name or "",
+            "username": user.username or "لا يوجد",
+            "phone": user.phone or "غير مرئي",
+            "premium": getattr(user, "premium", False),
+            "bot": user.bot or False,
+            "about": full.about or "لا يوجد",
+        }
+    except:
+        return None
+
+async def get_common_chats(user_id):
+    """جلب المجموعات المشتركة"""
+    common = []
+    try:
+        async for dialog in client.iter_dialogs():
+            if dialog.is_group or dialog.is_channel:
+                try:
+                    await client.get_participants(dialog.entity, limit=1)
+                    common.append(dialog.name)
+                except:
+                    continue
+    except:
+        pass
+    return common[:5]
+
+# ===================================================================
+# 🛡️ دوال الحماية
 # ===================================================================
 
 async def check_spam(user_id):
-    """فحص السبام"""
     now = time.time()
     user_timestamps[user_id] = [ts for ts in user_timestamps[user_id] if now - ts < COOLDOWN_SECONDS]
     user_timestamps[user_id].append(now)
     return len(user_timestamps[user_id])
 
 # ===================================================================
-# 📩 معالج الرسائل الرئيسي
+# 📩 معالج الرسائل - مع جلب المعلومات
 # ===================================================================
 
 @client.on(events.NewMessage(incoming=True))
-async def message_handler(event):
+async def handler(event):
     if not event.is_private:
         return
     
@@ -175,103 +155,204 @@ async def message_handler(event):
     username = sender.username or ""
     text = event.raw_text or ""
     
-    # تجاهل المالك
     if user_id == OWNER_ID:
         return
     
-    # وضع المحادثة - إذا كنت ترد على هذا الشخص
-    if user_id in talking_mode:
-        if time.time() - talking_mode[user_id] < TALKING_TIMEOUT:
-            print(f"⏸️ وضع المحادثة: تم تجاهل {user_name}")
-            return
+    if user_id in talking_mode and time.time() - talking_mode[user_id] < TALKING_TIMEOUT:
+        return
     
-    # المستخدمين المحظورين
     if user_id in data_manager.blocked_users:
         await event.reply("🚫 أنت محظور من هذا الحساب.")
         return
     
-    # حفظ أو تحديث بيانات المستخدم
-    data_manager.get_or_create_user(user_id, user_name, username)
+    # حفظ بيانات المستخدم
+    user_data = data_manager.get_user(user_id)
+    if not user_data:
+        user_data = {"messages": 0, "first_seen": datetime.now().isoformat()}
+    user_data["last_seen"] = datetime.now().isoformat()
+    user_data["name"] = user_name
+    user_data["username"] = username
+    data_manager.save_user(user_id, user_data)
     
     # فحص السبام
     msg_count = await check_spam(user_id)
     
     if msg_count == WARNING_LIMIT:
-        await event.reply("⚠️ **تنبيه**: إرسال سريع للرسائل، رجاءً تمهل قليلاً.")
-        data_manager.add_message(user_id, text, "تحذير سبام")
-        print(f"⚠️ تحذير لـ {user_name}: {msg_count} رسائل")
+        await event.reply("⚠️ **تنبيه**: إرسال سريع للرسائل، رجاءً تمهل.")
         return
     
     if msg_count >= MAX_MESSAGES:
         data_manager.blocked_users.add(user_id)
         data_manager.save_data()
-        await event.reply(f"🚫 **تم حظرك تلقائياً** 🚫\n\nلقد تجاوزت الحد المسموح ({MAX_MESSAGES} رسائل خلال {COOLDOWN_SECONDS} ثانية).")
-        data_manager.add_message(user_id, text, "حظر تلقائي")
-        print(f"🔨 تم حظر {user_name}")
+        await event.reply(f"🚫 **تم حظرك تلقائياً** (أرسلت {MAX_MESSAGES} رسائل خلال {COOLDOWN_SECONDS} ثانية)")
         return
     
-    # تأخير الرد الطبيعي
-    await asyncio.sleep(REPLY_DELAY)
+    # ========== جلب المعلومات الكاملة ==========
+    info = await get_user_info(user_id)
+    common_chats = await get_common_chats(user_id)
     
-    # اختيار رد عشوائي
+    # بناء بطاقة المعلومات
+    if info:
+        info_card = f"""
+╔══════════════════════════════╗
+☠️ **معلومات المرسل** ☠️
+╚══════════════════════════════╝
+
+👤 **الاسم:** {info['first_name']} {info['last_name']}
+🆔 **يوزرنيم:** @{info['username']}
+🔢 **الايدي:** `{user_id}`
+📞 **رقم الهاتف:** {info['phone']}
+💎 **بريميوم:** {'✅' if info['premium'] else '❌'}
+🤖 **بوت:** {'✅' if info['bot'] else '❌'}
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯
+📝 **عن الحساب:**
+{info['about'][:100]}
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯
+📢 **مجموعات مشتركة:**
+{chr(10).join([f'• {c}' for c in common_chats]) if common_chats else '• لا توجد'}
+
+📅 **التاريخ:** {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}
+━━━━━━━━━━━━━━━━━━━━━━━━━
+"""
+        await event.reply(info_card)
+        await asyncio.sleep(1)
+    
+    # الرد العادي
+    await asyncio.sleep(REPLY_DELAY)
     reply = random.choice(REPLIES)
     await event.reply(reply)
     
     # إرسال الصورة
     try:
         await event.reply(file=DEFAULT_IMAGE)
-        print(f"🖼️ تم إرسال الصورة لـ {user_name}")
-    except Exception as e:
-        print(f"⚠️ فشل إرسال الصورة: {e}")
+    except:
+        pass
     
-    # تسجيل الرسالة
-    data_manager.add_message(user_id, text, reply)
+    # تحديث إحصائيات المستخدم
+    user_data["messages"] = user_data.get("messages", 0) + 1
+    data_manager.save_user(user_id, user_data)
     
-    # طباعة في السجل
-    print(f"[{datetime.now().strftime('%H:%M:%S')}] {user_name}: {text[:50]}... -> {reply[:30]}...")
+    print(f"[{datetime.now().strftime('%H:%M:%S')}] {user_name}: {text[:40]}")
 
 # ===================================================================
-# 📤 تتبع رسائل المالك (وضع المحادثة)
+# 📤 تتبع رسائل المالك
 # ===================================================================
 
 @client.on(events.NewMessage(outgoing=True))
-async def track_owner_messages(event):
+async def track_owner(event):
     if not event.is_private:
         return
-    # سجل أنك رديت على هذا الشخص
     talking_mode[event.chat_id] = time.time()
-    print(f"📝 تم تسجيل محادثة مع {event.chat_id}")
 
 # ===================================================================
-# 🧹 تنظيف وضع المحادثة القديم
+# 🌐 خادم الويب (للمنفذ المطلوب)
 # ===================================================================
 
-async def clean_talking_mode():
-    """ينظف وضع المحادثة كل دقيقة"""
-    while True:
-        await asyncio.sleep(60)
-        now = time.time()
-        expired = [uid for uid, ts in talking_mode.items() if now - ts > TALKING_TIMEOUT]
-        for uid in expired:
-            del talking_mode[uid]
-        if expired:
-            print(f"🧹 تم تنظيف {len(expired)} محادثة منتهية")
+async def health_check(request):
+    """صفحة فحص الصحة - عشان المنفذ"""
+    return web.Response(
+        text=f"""✅ CYBER AI ENGINE ONLINE
+━━━━━━━━━━━━━━━━━━━━━━
+⏰ الوقت: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}
+👥 المستخدمين: {len(data_manager.users)}
+🚫 المحظورين: {len(data_manager.blocked_users)}
+💬 إجمالي الرسائل: {sum(u.get('messages', 0) for u in data_manager.users.values())}
+━━━━━━━━━━━━━━━━━━━━━━
+☠️ النظام يعمل بكفاءة 100%
+""",
+        content_type="text/plain",
+        status=200
+    )
 
-# ===================================================================
-# 📊 طباعة الإحصائيات
-# ===================================================================
+async def dashboard(request):
+    """لوحة تحكم بسيطة"""
+    users_list = ""
+    for uid, udata in list(data_manager.users.items())[-20:]:
+        users_list += f"""
+        <tr>
+            <td>{udata.get('name', 'مجهول')} </td>
+            <td>@{udata.get('username', '-')} </td>
+            <td>{udata.get('messages', 0)} </td>
+            <td>{udata.get('last_seen', '-')[:16]} </td>
+        </tr>
+        """
+    
+    html = f"""
+    <!DOCTYPE html>
+    <html lang="ar" dir="rtl">
+    <head>
+        <meta charset="UTF-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <title>💀 سايبر أنجن - لوحة التحكم</title>
+        <style>
+            body {{
+                background: linear-gradient(135deg, #0a0a0a 0%, #1a1a2e 100%);
+                color: #e2e8f0;
+                font-family: system-ui;
+                padding: 20px;
+            }}
+            .container {{ max-width: 1000px; margin: 0 auto; }}
+            .header {{ text-align: center; padding: 30px; background: rgba(0,0,0,0.5); border-radius: 20px; margin-bottom: 30px; }}
+            .header h1 {{ background: linear-gradient(135deg, #00ffff, #ff00ff); -webkit-background-clip: text; background-clip: text; color: transparent; }}
+            .stats {{ display: grid; grid-template-columns: repeat(4, 1fr); gap: 15px; margin-bottom: 30px; }}
+            .stat-card {{ background: rgba(30,30,50,0.9); padding: 20px; border-radius: 15px; text-align: center; }}
+            .stat-number {{ font-size: 2em; font-weight: bold; color: #00ffff; }}
+            .card {{ background: rgba(30,30,50,0.9); border-radius: 20px; padding: 20px; }}
+            table {{ width: 100%; border-collapse: collapse; }}
+            th, td {{ padding: 10px; text-align: right; border-bottom: 1px solid #334155; }}
+            th {{ color: #00ffff; }}
+            .status {{ display: inline-block; padding: 5px 15px; background: #00ff0044; color: #00ff00; border-radius: 20px; }}
+        </style>
+    </head>
+    <body>
+        <div class="container">
+            <div class="header">
+                <h1>💀 سايبر أنجن - Cyber Engine 💀</h1>
+                <div class="status">🟢 النظام يعمل 24/7</div>
+            </div>
+            
+            <div class="stats">
+                <div class="stat-card"><div class="stat-number">{len(data_manager.users)}</div><div>👥 المستخدمين</div></div>
+                <div class="stat-card"><div class="stat-number">{len(data_manager.blocked_users)}</div><div>🚫 المحظورين</div></div>
+                <div class="stat-card"><div class="stat-number">{sum(u.get('messages', 0) for u in data_manager.users.values())}</div><div>💬 الرسائل</div></div>
+                <div class="stat-card"><div class="stat-number">{len(talking_mode)}</div><div>🗣️ محادثات نشطة</div></div>
+            </div>
+            
+            <div class="card">
+                <h3>📋 آخر المستخدمين</h3>
+                <div style="overflow-x: auto;">
+                    <table>
+                        <thead><tr><th>الاسم</th><th>يوزرنيم</th><th>الرسائل</th><th>آخر ظهور</th></tr></thead>
+                        <tbody>{users_list if users_list else '<tr><td colspan="4">لا يوجد مستخدمين بعد</td></tr>'}</tbody>
+                    </table>
+                </div>
+            </div>
+            
+            <div style="text-align: center; padding: 30px; color: #64748b;">
+                <p>💀 سايبر أنجن - نظام حماية وردود ذكية 💀</p>
+                <p>{datetime.now().strftime('%Y-%m-%d %H:%M:%S')}</p>
+            </div>
+        </div>
+    </body>
+    </html>
+    """
+    return web.Response(text=html, content_type="text/html")
 
-async def print_stats():
-    """يطبع إحصائيات كل ساعة"""
-    while True:
-        await asyncio.sleep(3600)  # كل ساعة
-        print("=" * 50)
-        print(f"📊 إحصائيات:")
-        print(f"   👥 المستخدمين: {len(data_manager.users)}")
-        print(f"   🚫 المحظورين: {len(data_manager.blocked_users)}")
-        print(f"   💬 إجمالي الرسائل: {sum(u.total_messages for u in data_manager.users.values())}")
-        print(f"   🗣️ محادثات نشطة: {len(talking_mode)}")
-        print("=" * 50)
+async def start_web_server():
+    """تشغيل خادم الويب على المنفذ 8080"""
+    app = web.Application()
+    app.router.add_get('/', dashboard)
+    app.router.add_get('/dashboard', dashboard)
+    app.router.add_get('/health', health_check)
+    
+    runner = web.AppRunner(app)
+    await runner.setup()
+    site = web.TCPSite(runner, '0.0.0.0', 8080)
+    await site.start()
+    print("✅ خادم الويب شغال على المنفذ 8080")
+    print("🌐 لوحة التحكم: http://localhost:8080/dashboard")
 
 # ===================================================================
 # 🚀 التشغيل الرئيسي
@@ -279,25 +360,20 @@ async def print_stats():
 
 async def main():
     print("=" * 60)
-    print("💀 سايبر أنجن - النسخة الأسطورية النهائية 💀")
+    print("💀 سايبر أنجن - النسخة النهائية الكاملة 💀")
     print("=" * 60)
     
-    # تشغيل البوت
     await client.start()
     me = await client.get_me()
     
-    # تشغيل المهام الخلفية
-    asyncio.create_task(clean_talking_mode())
-    asyncio.create_task(print_stats())
+    # تشغيل خادم الويب
+    asyncio.create_task(start_web_server())
     
     print(f"✅ الحساب: {me.first_name} (@{me.username})")
-    print(f"🆔 الايدي: {me.id}")
-    print(f"🖼️ الصورة: {DEFAULT_IMAGE}")
-    print(f"🛡️ الحماية: {MAX_MESSAGES} رسائل خلال {COOLDOWN_SECONDS} ثانية = حظر")
-    print(f"⚠️ تحذير عند: {WARNING_LIMIT} رسائل")
-    print(f"💬 وضع المحادثة: {TALKING_TIMEOUT // 60} دقيقة")
+    print(f"🛡️ الحماية: {MAX_MESSAGES} رسائل = حظر")
+    print(f"🌐 المنفذ: 8080")
     print("=" * 60)
-    print("💀 النظام جاهز للعمل 24/7 💀")
+    print("💀 النظام جاهز 24/7 💀")
     print("=" * 60)
     
     await client.run_until_disconnected()
