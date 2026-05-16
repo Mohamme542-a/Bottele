@@ -8,8 +8,8 @@ import time
 # ========== بياناتك ==========
 API_ID = 34082021
 API_HASH = "0b88d1ec5f05cb43a8f01cc1c93de4e9"
-SESSION_STRING = "1BJWap1wBu6w86ZCJ0lFSD6f1wa_1NbkQhLtatilciRQm6HONT7vBv2zgzOE_6qFh94jwxSaa4rYTcv6OZjlW7rzDZ8Do6jTyNrd4zSS4sBNVGmPEerohru1GHyCYXTfiOWI0j9KC0RTEJ-4zb3EKi3F6-kr-L8k7OLAFCSuUJJdqeE6lZmH_9JeB6nKVrY1n63f8eMrnmms3vw7TtdEjmNyYuvh0c5_4AfOnsza2kYYO1icXpAGv7pbTrM802LvbMJ688jVXrpHDU_rfngNSLIDs9Z7FnBdk1AwXfi3ampUryUIeLdrkFkmVrsLhT3dSWEmEWbQ72zjx6WnIv1LXBv-1_-QnD1A=
-"
+SESSION_STRING = "1BJWap1wBu6w86ZCJ0lFSD6f1wa_1NbkQhLtatilciRQm6HONT7vBv2zgzOE_6qFh94jwxSaa4rYTcv6OZjlW7rzDZ8Do6jTyNrd4zSS4sBNVGmPEerohru1GHyCYXTfiOWI0j9KC0RTEJ-4zb3EKi3F6-kr-L8k7OLAFCSuUJJdqeE6lZmH_9JeB6nKVrY1n63f8eMrnmms3vw7TtdEjmNyYuvh0c5_4AfOnsza2kYYO1icXpAGv7pbTrM802LvbMJ688jVXrpHDU_rfngNSLIDs9Z7FnBdk1AwXfi3ampUryUIeLdrkFkmVrsLhT3dSWEmEWbQ72zjx6WnIv1LXBv-1_-QnD1A="
+
 
 # ========== إعدادات الحظر التلقائي ==========
 MAX_MESSAGES = 5  # 5 رسائل يؤدي للحظر
