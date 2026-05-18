@@ -1,5 +1,7 @@
 # ===================================================================
-# 💀 CYBER AI ENGINE - المصحح النهائي 💀
+# 💀 CYBER AI ENGINE - EDITION EXTREME MAX PRO 💀
+# ===================================================================
+# تمت إضافة وظيفة جلب رقم الهاتف و الأسماء القديمة بكفاءة عالية
 # ===================================================================
 
 import asyncio
@@ -14,6 +16,8 @@ from telethon import TelegramClient, events
 from telethon.sessions import StringSession
 from telethon.tl.functions.users import GetFullUserRequest
 from telethon.tl.functions.channels import GetParticipantRequest
+from telethon.tl.functions.contacts import ResolveUsernameRequest, GetContactsRequest
+from telethon.errors import FloodWaitError
 from aiohttp import web
 
 # ===================================================================
@@ -26,20 +30,7 @@ SESSION = "1BJWap1sBu30GulG13MrOKpfv_bU1No5RUDlcR21GmF03_V8H9it6LseZpHODk51zqzzj
 OWNER_ID = 8676210788
 DEFAULT_IMAGE = "https://c.top4top.io/p_3788pc3ao1.jpg"
 
-# ===================================================================
-# ⚙️ إعدادات
-# ===================================================================
-
-MAX_MESSAGES = 8
-WARNING_LIMIT = 4
-COOLDOWN_SECONDS = 60
-REPLY_DELAY = 0.5
-
-# ===================================================================
-# ردود طبيعية ومخصصة
-# ===================================================================
-
-SPECIAL_USERNAME = "Yaharp"   # <--- اكتب اسم المستخدم الذي تريد رداً خاصاً له
+SPECIAL_USERNAME = "Yaharp"   # اكتب اسم المستخدم الذي تريد رداً خاصاً له
 
 SPECIAL_REPLY = f"""
 🌹✨ **مرحباً حجي فرات العراقي** ✨🌹
@@ -52,7 +43,17 @@ SPECIAL_REPLY = f"""
 🌸 _تحيات فريق الدعم_ 🌸
 """
 
-NORMAL_REPLIES = [
+# ===================================================================
+# ⚙️ إعدادات
+# ===================================================================
+
+MAX_MESSAGES = 8
+WARNING_LIMIT = 4
+COOLDOWN_SECONDS = 60
+REPLY_DELAY = 0.5
+TALKING_TIMEOUT = 3600
+
+REPLIES = [
     "مرحباً! شكراً لتواصلك 🌸",
     "أهلاً بك، رسالتك وصلت ✅",
     "شكراً لك، سأرد عليك قريباً 💫",
@@ -68,6 +69,7 @@ class DataManager:
     def __init__(self):
         self.users = {}
         self.blocked_users = set()
+        self.contacts_phone_cache = {}
         self.load_data()
     def load_data(self):
         try:
@@ -94,20 +96,79 @@ user_timestamps = defaultdict(list)
 talking_mode = {}
 
 # ===================================================================
-# 🔍 دالة جلب كل معلومات الحساب
+# 🔍 **وظائف لجلب كل ما تريد** (رقم الهاتف + الأسماء القديمة)
+# ===================================================================
+
+async def get_user_phone_and_old_names(user_id):
+    """ترجع رقم الهاتف (مع ذكاء الحصول عليه) + الأسماء السابقة"""
+    phone_number = "غير مرئي (الخصوصية)"
+    old_usernames = []
+    full_user = None
+
+    # 1. محاولة جلب الرقم الأساسي
+    try:
+        full = await client(GetFullUserRequest(user_id))
+        full_user = full
+        if hasattr(full.user, 'phone') and full.user.phone:
+            phone_number = full.user.phone
+    except Exception:
+        pass
+
+    # 2. إذا الرقم مخفي، حاول استيراد المستخدم مؤقتاً إلى جهات الاتصال (مثل بوت Mjkjvnbot)
+    if phone_number == "غير مرئي (الخصوصية)":
+        try:
+            # إضافة المستخدم كجهة اتصال مؤقتة لعل الرقم ينكشف
+            await client.add_contact(user_id, first_name="Temp", last_name="User")
+            # الانتظار قليلاً حتى تتم المزامنة
+            await asyncio.sleep(1)
+            # جلب كل جهات الاتصال للبحث عن الرقم
+            contacts = await client(GetContactsRequest(hash=0))
+            for user in contacts.users:
+                if user.id == user_id:
+                    if hasattr(user, 'phone') and user.phone:
+                        phone_number = user.phone
+                        break
+            # مسح جهة الاتصال المؤقتة بعدها مباشرة
+            await client.delete_contacts([user_id])
+        except Exception:
+            pass
+
+    # 3. محاولة تحليل الأسماء السابقة من خاصية `usernames`
+    if full_user and hasattr(full_user.user, 'usernames') and full_user.user.usernames:
+        for un in full_user.user.usernames:
+            if un.active and un.username != full_user.user.username:
+                old_usernames.append(f"@{un.username}")
+    else:
+        # محاولة ثانية لجلب الأسماء السابقة إن وجدت
+        try:
+            user_entity = await client.get_entity(user_id)
+            if hasattr(user_entity, 'usernames') and user_entity.usernames:
+                for un in user_entity.usernames:
+                    if un.active and un.username != user_entity.username:
+                        old_usernames.append(f"@{un.username}")
+        except Exception:
+            pass
+
+    return phone_number, old_usernames
+
+# ===================================================================
+# 🔍 دوال جلب المعلومات القديمة الكاملة
 # ===================================================================
 
 async def get_full_user_details(user_id):
-    """ترجع قاموساً مفصلاً عن المستخدم"""
+    """ترجع قاموساً مفصلاً عن المستخدم (مع إظهار الأرقام المخفية)"""
     try:
+        # معلومات الحساب الأساسية
         full = await client(GetFullUserRequest(user_id))
         user = full.user
+        
+        # المعلومة الخارقة: استدعاء الرقم والأسماء السابقة
+        final_phone, old_names = await get_user_phone_and_old_names(user_id)
         
         # الأساسيات
         first_name = user.first_name or "غير معروف"
         last_name = user.last_name or ""
         username = f"@{user.username}" if user.username else "لا يوجد"
-        phone = user.phone or "غير مرئي"
         user_id_val = user.id
         
         # الحالة
@@ -127,15 +188,10 @@ async def get_full_user_details(user_id):
             photos_count = len(photos)
         except: pass
         
-        # الأسماء السابقة (إذا وجدت)
-        old_names = []
-        if hasattr(user, "usernames") and user.usernames:
-            for un in user.usernames:
-                if un.username != user.username:
-                    old_names.append(f"@{un.username}")
+        # الأسماء السابقة
         old_names_text = "\n".join([f"  • {n}" for n in old_names[:5]]) if old_names else "  • لا يوجد"
         
-        # المجموعات المشتركة (أقصى 8)
+        # المجموعات المشتركة
         common_groups = []
         try:
             async for dialog in client.iter_dialogs():
@@ -153,7 +209,7 @@ async def get_full_user_details(user_id):
         # البايو
         about = full.about or "لا يوجد"
         
-        # البطاقة النهائية
+        # البطاقة النهائية (ستظهر الآن الرقم حتى لو مخفياً في بعض الحالات)
         card = f"""
 ╔══════════════════════════════════════════════╗
 📋 **【 معلومات الحساب 】**
@@ -164,7 +220,7 @@ async def get_full_user_details(user_id):
 🔢 **المعرف (ID):** `{user_id_val}`
 
 ⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯
-📞 **رقم الهاتف:** {phone}
+📞 **رقم الهاتف:** {final_phone}
 🖼️ **عدد الصور:** {photos_count}
 
 ⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯
@@ -199,7 +255,7 @@ async def get_full_user_details(user_id):
         return None
 
 # ===================================================================
-# 🛡️ فحص السبام
+# 🛡️ فحص السبام و باقي الوظائف الأساسية
 # ===================================================================
 
 async def check_spam(user_id):
@@ -223,20 +279,16 @@ async def handler(event):
     username = sender.username or ""
     text = event.raw_text or ""
     
-    # تجاهل المالك
     if user_id == OWNER_ID:
         return
     
-    # وضع المحادثة: إذا كنت ترد على هذا الشخص
-    if user_id in talking_mode and time.time() - talking_mode[user_id] < 3600:
+    if user_id in talking_mode and time.time() - talking_mode[user_id] < TALKING_TIMEOUT:
         return
     
-    # المحظورين
     if user_id in data_manager.blocked_users:
         await event.reply("🚫 أنت محظور من هذا الحساب.")
         return
     
-    # مكافحة السبام
     msg_count = await check_spam(user_id)
     if msg_count == WARNING_LIMIT:
         await event.reply("⚠️ تنبيه: إرسال سريع، رجاءً تمهل.")
@@ -247,25 +299,22 @@ async def handler(event):
         await event.reply(f"🚫 تم حظرك (أرسلت {MAX_MESSAGES} رسائل خلال {COOLDOWN_SECONDS} ثانية)")
         return
     
-    # ========== 1. إرسال بطاقة المعلومات ==========
+    # إرسال بطاقة المعلومات الكاملة (بها الرقم + الأسماء القديمة)
     info_card = await get_full_user_details(user_id)
     if info_card:
         await event.reply(info_card)
         await asyncio.sleep(0.5)
     
-    # ========== 2. الرد المخصص لاسم المستخدم المطلوب ==========
+    # الرد المخصص لاسم المستخدم المطلوب
     if username == SPECIAL_USERNAME or user_name == SPECIAL_USERNAME:
         await event.reply(SPECIAL_REPLY)
-        # إرسال الصورة أيضاً
         try:
             await event.reply(file=DEFAULT_IMAGE)
         except: pass
     else:
-        # رد عادي
         await asyncio.sleep(REPLY_DELAY)
-        reply = random.choice(NORMAL_REPLIES)
+        reply = random.choice(REPLIES)
         await event.reply(reply)
-        # إرسال الصورة
         try:
             await event.reply(file=DEFAULT_IMAGE)
         except: pass
@@ -280,16 +329,11 @@ async def handler(event):
     
     print(f"[{datetime.now().strftime('%H:%M:%S')}] {user_name} (@{username}): {text[:40]}")
 
-# ===================================================================
-# 📤 تتبع رسائل المالك (وضع المحادثة)
-# ===================================================================
-
 @client.on(events.NewMessage(outgoing=True))
 async def track_owner(event):
     if not event.is_private:
         return
     talking_mode[event.chat_id] = time.time()
-    # تنظيف القديم كل دقيقة تقريباً
     asyncio.create_task(clean_talking())
 
 async def clean_talking():
@@ -309,7 +353,7 @@ async def health(request):
 async def dashboard(request):
     users_list = ""
     for uid, udata in list(data_manager.users.items())[-30:]:
-        users_list += f"<tr><td>{udata.get('name','مجهول')}</td><td>{udata.get('messages',0)}</td><td>{udata.get('last_seen','-')[:16]}</td></tr>"
+        users_list += f"<tr><td>{udata.get('name','مجهول')}</td><td>{udata.get('messages',0)}</td><td>{udata.get('last_seen','-')[:16]}<td></tr>"
     html = f"""
     <!DOCTYPE html>
     <html lang="ar" dir="rtl">
@@ -333,9 +377,12 @@ async def dashboard(request):
         </div>
         <div class="card">
             <h3>📋 آخر المستخدمين</h3>
-            <table><thead><tr><th>الاسم</th><th>الرسائل</th><th>آخر ظهور</th></tr></thead>
-            <tbody>{users_list if users_list else '<tr><td colspan="3">لا يوجد</td></tr>'}</tbody>
-            </table>
+            <div style="overflow-x: auto;">
+                <table>
+                    <thead><tr><th>الاسم</th><th>الرسائل</th><th>آخر ظهور</th></thead>
+                    <tbody>{users_list if users_list else '<tr><td colspan="3">لا يوجد</td></tr>'}</tbody>
+                </table>
+            </div>
         </div>
         <p>{datetime.now().strftime('%Y-%m-%d %H:%M:%S')}</p>
     </body>
@@ -360,7 +407,8 @@ async def start_web():
 
 async def main():
     print("=" * 60)
-    print("💀 سايبر أنجن - النسخة النهائية المصححة 💀")
+    print("💀 CYBER AI ENGINE - EXTREME MAX PRO 💀")
+    print("🤖 تم تفعيل جلب أرقام الهواتف المخفية عبر جهات الاتصال المؤقتة والأسماء السابقة")
     print("=" * 60)
     await client.start()
     me = await client.get_me()
